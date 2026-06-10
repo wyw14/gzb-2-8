@@ -63,6 +63,24 @@
             </div>
           </div>
 
+          <div v-if="match.recommendReasons && match.recommendReasons.length" class="recommend-section">
+            <h4 class="recommend-title">💡 推荐理由</h4>
+            <div class="reason-list">
+              <span v-for="(reason, idx) in match.recommendReasons" :key="idx" class="reason-tag">
+                {{ reason }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="match.user.teachingStyleTag || match.user.swapAgainRate !== null" class="partner-retro-tags">
+            <span v-if="match.user.teachingStyleTag" class="retro-tag retro-style">
+              🏷️ {{ match.user.teachingStyleTag }}
+            </span>
+            <span v-if="match.user.swapAgainRate !== null" class="retro-tag retro-again">
+              🔁 {{ match.user.swapAgainRate }}%回头率
+            </span>
+          </div>
+
           <div class="match-actions">
             <el-button @click="goToProfile(match.userId)">
               <el-icon><User /></el-icon>查看主页
@@ -307,5 +325,62 @@ async function createExchange(match) {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+}
+
+.recommend-section {
+  padding: 16px 20px;
+  background: #f0f4ff;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  border-left: 4px solid #667eea;
+}
+
+.recommend-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.reason-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reason-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  background: white;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #444;
+  line-height: 1.5;
+}
+
+.partner-retro-tags {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.retro-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.retro-style {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.retro-again {
+  background: #e3f2fd;
+  color: #1565c0;
 }
 </style>

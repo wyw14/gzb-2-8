@@ -1,4 +1,4 @@
-function calculateMatchScore(user1Skills, user2Skills, user1Prefs, user2Prefs) {
+function calculateMatchScore(user1Skills, user2Skills, user1Prefs, user2Prefs, user1Data, user2Data) {
   let score = 0;
   let maxScore = 0;
 
@@ -43,14 +43,62 @@ function calculateMatchScore(user1Skills, user2Skills, user1Prefs, user2Prefs) {
     score += 5;
   }
 
+  maxScore += 10;
+  if (user2Data) {
+    if (user2Data.rating && user2Data.rating >= 4.5) {
+      score += 7;
+    } else if (user2Data.rating && user2Data.rating >= 4) {
+      score += 4;
+    }
+    if (user2Data.swapAgainRate !== null && user2Data.swapAgainRate !== undefined) {
+      score += Math.round(user2Data.swapAgainRate / 100 * 3);
+    }
+  } else {
+    score += 5;
+  }
+
   return Math.min(100, Math.round((score / maxScore) * 100));
 }
 
-function findMatchesForUser(userId, allUsers, allSkills) {
+function generateRecommendReasons(userId, otherUser, matchedSkills, allReviews) {
+  const reasons = [];
+
+  const reviewsByOther = allReviews.filter(r => r.reviewerId === otherUser.id);
+  const reviewsAboutOther = allReviews.filter(r => r.targetUserId === otherUser.id);
+
+  if (matchedSkills.iCanLearn.length > 0) {
+    reasons.push(`可以向TA学习: ${matchedSkills.iCanLearn.join('、')}`);
+  }
+  if (matchedSkills.iCanTeach.length > 0) {
+    reasons.push(`你可以教授TA: ${matchedSkills.iCanTeach.join('、')}`);
+  }
+
+  if (otherUser.rating && otherUser.rating >= 4.5) {
+    reasons.push(`高评分搭档 (${otherUser.rating}分)`);
+  }
+
+  if (otherUser.swapAgainRate !== null && otherUser.swapAgainRate !== undefined && otherUser.swapAgainRate >= 80) {
+    reasons.push(`${otherUser.swapAgainRate}%的搭档愿意再次交换`);
+  }
+
+  if (otherUser.teachingStyleTag) {
+    reasons.push(`教学风格: ${otherUser.teachingStyleTag}`);
+  }
+
+  const myReviewsAboutOther = reviewsByOther.filter(r => r.targetUserId === otherUser.id);
+  if (myReviewsAboutOther.some(r => r.wouldSwapAgain === true)) {
+    reasons.push('你曾表示愿意再次与TA交换');
+  }
+
+  return reasons;
+}
+
+function findMatchesForUser(userId, allUsers, allSkills, allReviews) {
   const userSkills = allSkills.filter(s => s.userId === userId);
   const user = allUsers.find(u => u.id === userId);
   if (!user || userSkills.length === 0) return [];
 
+  const reviews = allReviews || [];
   const matches = [];
   const otherUsers = allUsers.filter(u => u.id !== userId);
 
@@ -62,11 +110,15 @@ function findMatchesForUser(userId, allUsers, allSkills) {
       userSkills,
       otherSkills,
       user.preferences || {},
-      other.preferences || {}
+      other.preferences || {},
+      null,
+      { rating: other.rating, swapAgainRate: other.swapAgainRate }
     );
 
     if (score >= 30) {
       const matchedSkills = getMatchedSkills(userSkills, otherSkills);
+      const recommendReasons = generateRecommendReasons(userId, other, matchedSkills, reviews);
+
       matches.push({
         userId: other.id,
         user: {
@@ -75,10 +127,13 @@ function findMatchesForUser(userId, allUsers, allSkills) {
           avatar: other.avatar,
           bio: other.bio,
           rating: other.rating,
-          exchangeCount: other.exchangeCount
+          exchangeCount: other.exchangeCount,
+          teachingStyleTag: other.teachingStyleTag || null,
+          swapAgainRate: other.swapAgainRate !== undefined ? other.swapAgainRate : null
         },
         score,
         matchedSkills,
+        recommendReasons,
         createdAt: new Date().toISOString()
       });
     }
@@ -111,5 +166,6 @@ function getMatchedSkills(user1Skills, user2Skills) {
 
 module.exports = {
   calculateMatchScore,
-  findMatchesForUser
+  findMatchesForUser,
+  generateRecommendReasons
 };

@@ -81,7 +81,7 @@
             <div class="exchange-actions">
               <el-button type="success" @click="showReviewDialog(exchange)" :disabled="hasReviewed(exchange)">
                 <el-icon><Star /></el-icon>
-                {{ hasReviewed(exchange) ? '已评价' : '去评价' }}
+                {{ hasReviewed(exchange) ? '已复盘' : '去复盘' }}
               </el-button>
             </div>
           </div>
@@ -90,7 +90,7 @@
       </div>
     </div>
 
-    <el-dialog v-model="showReview" title="评价这次交换" width="500px">
+    <el-dialog v-model="showReview" title="交换复盘" width="560px">
       <div v-if="currentExchange" class="review-form">
         <div class="review-user">
           <el-avatar :src="getUserAvatar(getOtherUserId(currentExchange))" :size="56" />
@@ -100,14 +100,33 @@
           <el-form-item label="评分">
             <el-rate v-model="reviewForm.rating" size="large" />
           </el-form-item>
-          <el-form-item label="评价内容">
-            <el-input v-model="reviewForm.comment" type="textarea" :rows="4" placeholder="分享一下这次交换的体验..." maxlength="500" show-word-limit />
+          <el-form-item label="你学到了什么">
+            <el-input v-model="reviewForm.learnedContent" type="textarea" :rows="3" placeholder="总结这次交换中学到的内容..." maxlength="300" show-word-limit />
+          </el-form-item>
+          <el-form-item label="对方的教学方式">
+            <el-select v-model="reviewForm.teachingStyle" placeholder="选择最贴切的描述" clearable style="width: 100%">
+              <el-option label="耐心细致" value="耐心细致" />
+              <el-option label="启发引导" value="启发引导" />
+              <el-option label="实战为主" value="实战为主" />
+              <el-option label="理论扎实" value="理论扎实" />
+              <el-option label="风趣幽默" value="风趣幽默" />
+              <el-option label="循序渐进" value="循序渐进" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="是否愿意再次交换">
+            <el-radio-group v-model="reviewForm.wouldSwapAgain">
+              <el-radio :value="true">愿意</el-radio>
+              <el-radio :value="false">不愿意</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="补充评价">
+            <el-input v-model="reviewForm.comment" type="textarea" :rows="3" placeholder="分享一下这次交换的体验..." maxlength="500" show-word-limit />
           </el-form-item>
         </el-form>
       </div>
       <template #footer>
         <el-button @click="showReview = false">取消</el-button>
-        <el-button type="primary" @click="submitReview" :loading="submitting">提交评价</el-button>
+        <el-button type="primary" @click="submitReview" :loading="submitting">提交复盘</el-button>
       </template>
     </el-dialog>
   </div>
@@ -133,7 +152,7 @@ const confirmingId = ref(null)
 const showReview = ref(false)
 const currentExchange = ref(null)
 const submitting = ref(false)
-const reviewForm = ref({ rating: 5, comment: '' })
+const reviewForm = ref({ rating: 5, comment: '', learnedContent: '', teachingStyle: '', wouldSwapAgain: null })
 
 const pendingExchanges = computed(() =>
   exchanges.value.filter(e => e.status === 'pending')
@@ -221,7 +240,7 @@ function hasReviewed(exchange) {
 
 function showReviewDialog(exchange) {
   currentExchange.value = exchange
-  reviewForm.value = { rating: 5, comment: '' }
+  reviewForm.value = { rating: 5, comment: '', learnedContent: '', teachingStyle: '', wouldSwapAgain: null }
   showReview.value = true
 }
 
@@ -231,6 +250,18 @@ async function submitReview() {
     ElMessage.warning('请选择评分')
     return
   }
+  if (!reviewForm.value.learnedContent?.trim()) {
+    ElMessage.warning('请填写你学到的内容')
+    return
+  }
+  if (!reviewForm.value.teachingStyle) {
+    ElMessage.warning('请选择对方的教学方式')
+    return
+  }
+  if (reviewForm.value.wouldSwapAgain === null || reviewForm.value.wouldSwapAgain === undefined) {
+    ElMessage.warning('请选择是否愿意再次交换')
+    return
+  }
 
   try {
     submitting.value = true
@@ -238,7 +269,10 @@ async function submitReview() {
       exchangeId: currentExchange.value.id,
       targetUserId: getOtherUserId(currentExchange.value),
       rating: reviewForm.value.rating,
-      comment: reviewForm.value.comment
+      comment: reviewForm.value.comment,
+      learnedContent: reviewForm.value.learnedContent,
+      teachingStyle: reviewForm.value.teachingStyle,
+      wouldSwapAgain: reviewForm.value.wouldSwapAgain
     })
 
     if (!currentExchange.value.reviewedBy) {
@@ -246,10 +280,10 @@ async function submitReview() {
     }
     currentExchange.value.reviewedBy.push(myId)
 
-    ElMessage.success('评价成功')
+    ElMessage.success('复盘提交成功')
     showReview.value = false
   } catch (e) {
-    ElMessage.error(e.message || '评价失败')
+    ElMessage.error(e.message || '复盘提交失败')
   } finally {
     submitting.value = false
   }

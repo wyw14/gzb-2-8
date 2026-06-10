@@ -188,9 +188,10 @@ app.delete('/api/skills/:id', authMiddleware, (req, res) => {
 app.get('/api/matches', authMiddleware, (req, res) => {
   const users = readJson('users.json');
   const skills = readJson('skills.json');
+  const reviews = readJson('reviews.json');
   const { minScore, category } = req.query;
 
-  let matches = findMatchesForUser(req.user.id, users, skills);
+  let matches = findMatchesForUser(req.user.id, users, skills, reviews);
 
   if (minScore) {
     matches = matches.filter(m => m.score >= parseInt(minScore));
@@ -348,7 +349,7 @@ app.get('/api/exchanges', authMiddleware, (req, res) => {
 });
 
 app.post('/api/reviews', authMiddleware, (req, res) => {
-  const { exchangeId, targetUserId, rating, comment } = req.body;
+  const { exchangeId, targetUserId, rating, comment, learnedContent, teachingStyle, wouldSwapAgain } = req.body;
 
   if (!exchangeId || !targetUserId || !rating) {
     return res.status(400).json({ error: '请填写交换ID、评价对象和评分' });
@@ -376,7 +377,10 @@ app.post('/api/reviews', authMiddleware, (req, res) => {
     reviewerId: req.user.id,
     targetUserId: req.body.targetUserId,
     rating: req.body.rating,
-    comment: req.body.comment,
+    comment: req.body.comment || '',
+    learnedContent: learnedContent || '',
+    teachingStyle: teachingStyle || '',
+    wouldSwapAgain: wouldSwapAgain !== undefined ? wouldSwapAgain : null,
     createdAt: new Date().toISOString()
   };
   reviews.push(newReview);
@@ -389,10 +393,87 @@ app.post('/api/reviews', authMiddleware, (req, res) => {
     const avgRating = userReviews.reduce((sum, r) => sum + r.rating, 0) / userReviews.length;
     users[targetIndex].rating = Math.round(avgRating * 10) / 10;
     users[targetIndex].reviewCount = userReviews.length;
+
+    const targetReviewsAboutMe = reviews.filter(r => r.reviewerId === req.body.targetUserId);
+    const teachStyleCounts = {};
+    targetReviewsAboutMe.forEach(r => {
+      if (r.teachingStyle) {
+        teachStyleCounts[r.teachingStyle] = (teachStyleCounts[r.teachingStyle] || 0) + 1;
+      }
+    });
+    const topTeachStyle = Object.entries(teachStyleCounts).sort((a, b) => b[1] - a[1])[0];
+    if (topTeachStyle) {
+      users[targetIndex].teachingStyleTag = topTeachStyle[0];
+    }
+
+    const swapAgainReviews = reviews.filter(r => r.targetUserId === req.body.targetUserId && r.wouldSwapAgain !== null);
+    if (swapAgainReviews.length > 0) {
+      users[targetIndex].swapAgainRate = Math.round(
+        (swapAgainReviews.filter(r => r.wouldSwapAgain === true).length / swapAgainReviews.length) * 100
+      );
+    }
+
     writeJson('users.json', users);
   }
 
   res.json(newReview);
+});
+
+app.get('/api/reviews/retrospective/:userId', (req, res) => {
+  const reviews = readJson('reviews.json');
+  const users = readJson('users.json');
+  const userId = req.params.userId;
+
+  const reviewsAboutMe = reviews.filter(r => r.targetUserId === userId);
+  const myReviews = reviews.filter(r => r.reviewerId === userId);
+
+  const learnedContents = myReviews.filter(r => r.learnedContent).map(r => ({
+    content: r.learnedContent,
+    fromUser: r.targetUserId,
+    createdAt: r.createdAt
+  }));
+
+  const teachStyleCounts = {};
+  reviewsAboutMe.forEach(r => {
+    if (r.teachingStyle) {
+      teachStyleCounts[r.teachingStyle] = (teachStyleCounts[r.teachingStyle] || 0) + 1;
+    }
+  });
+  const teachingStyles = Object.entries(teachStyleCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([style, count]) => ({ style, count }));
+
+  const swapAgainReviews = reviewsAboutMe.filter(r => r.wouldSwapAgain !== null);
+  const swapAgainRate = swapAgainReviews.length > 0
+    ? Math.round((swapAgainReviews.filter(r => r.wouldSwapAgain === true).length / swapAgainReviews.length) * 100)
+    : null;
+
+  const avgRating = reviewsAboutMe.length > 0
+    ? Math.round((reviewsAboutMe.reduce((sum, r) => sum + r.rating, 0) / reviewsAboutMe.length) * 10) / 10
+    : null;
+
+  const partnerIds = [...new Set(myReviews.map(r => r.targetUserId))];
+  const frequentPartners = partnerIds.map(pid => {
+    const partner = users.find(u => u.id === pid);
+    const count = myReviews.filter(r => r.targetUserId === pid).length;
+    const wouldAgain = myReviews.filter(r => r.targetUserId === pid && r.wouldSwapAgain === true).length;
+    return {
+      userId: pid,
+      username: partner?.username || '未知用户',
+      avatar: partner?.avatar,
+      exchangeCount: count,
+      wouldSwapAgainCount: wouldAgain
+    };
+  }).sort((a, b) => b.exchangeCount - a.exchangeCount).slice(0, 5);
+
+  res.json({
+    learnedContents,
+    teachingStyles,
+    swapAgainRate,
+    avgRating,
+    totalReviews: reviewsAboutMe.length,
+    frequentPartners
+  });
 });
 
 app.get('/api/reviews/:userId', (req, res) => {

@@ -61,7 +61,8 @@ export const exchangeAPI = {
 
 export const reviewAPI = {
   createReview: (data) => api.post('/reviews', data),
-  getReviews: (userId) => api.get(`/reviews/${userId}`)
+  getReviews: (userId) => api.get(`/reviews/${userId}`),
+  getRetrospective: (userId) => api.get(`/reviews/retrospective/${userId}`)
 }
 
 export const statsAPI = {
