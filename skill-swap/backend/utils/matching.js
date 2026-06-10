@@ -63,9 +63,6 @@ function calculateMatchScore(user1Skills, user2Skills, user1Prefs, user2Prefs, u
 function generateRecommendReasons(userId, otherUser, matchedSkills, allReviews) {
   const reasons = [];
 
-  const reviewsByOther = allReviews.filter(r => r.reviewerId === otherUser.id);
-  const reviewsAboutOther = allReviews.filter(r => r.targetUserId === otherUser.id);
-
   if (matchedSkills.iCanLearn.length > 0) {
     reasons.push(`可以向TA学习: ${matchedSkills.iCanLearn.join('、')}`);
   }
@@ -85,7 +82,9 @@ function generateRecommendReasons(userId, otherUser, matchedSkills, allReviews) 
     reasons.push(`教学风格: ${otherUser.teachingStyleTag}`);
   }
 
-  const myReviewsAboutOther = reviewsByOther.filter(r => r.targetUserId === otherUser.id);
+  const myReviewsAboutOther = allReviews.filter(
+    r => r.reviewerId === userId && r.targetUserId === otherUser.id
+  );
   if (myReviewsAboutOther.some(r => r.wouldSwapAgain === true)) {
     reasons.push('你曾表示愿意再次与TA交换');
   }

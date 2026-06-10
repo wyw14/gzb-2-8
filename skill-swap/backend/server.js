@@ -363,6 +363,23 @@ app.post('/api/reviews', authMiddleware, (req, res) => {
 
   const reviews = readJson('reviews.json');
   const users = readJson('users.json');
+  const exchanges = readJson('exchanges.json');
+
+  const exchange = exchanges.find(e => e.id === exchangeId);
+  if (!exchange) {
+    return res.status(404).json({ error: '交换不存在' });
+  }
+  if (exchange.status !== 'completed') {
+    return res.status(400).json({ error: '只能评价已完成的交换' });
+  }
+  const isParticipant = exchange.initiatorId === req.user.id || exchange.partnerId === req.user.id;
+  if (!isParticipant) {
+    return res.status(403).json({ error: '无权评价此交换' });
+  }
+  const otherUserId = exchange.initiatorId === req.user.id ? exchange.partnerId : exchange.initiatorId;
+  if (targetUserId !== otherUserId) {
+    return res.status(400).json({ error: '评价对象必须是交换的另一方' });
+  }
 
   const existingReview = reviews.find(r =>
     r.exchangeId === req.body.exchangeId && r.reviewerId === req.user.id
@@ -386,17 +403,26 @@ app.post('/api/reviews', authMiddleware, (req, res) => {
   reviews.push(newReview);
   writeJson('reviews.json', reviews);
 
+  const exchangeIndex = exchanges.findIndex(e => e.id === exchangeId);
+  if (exchangeIndex !== -1) {
+    if (!exchanges[exchangeIndex].reviewedBy) {
+      exchanges[exchangeIndex].reviewedBy = [];
+    }
+    if (!exchanges[exchangeIndex].reviewedBy.includes(req.user.id)) {
+      exchanges[exchangeIndex].reviewedBy.push(req.user.id);
+    }
+    writeJson('exchanges.json', exchanges);
+  }
+
   const targetIndex = users.findIndex(u => u.id === req.body.targetUserId);
   if (targetIndex !== -1) {
-    const targetUser = users[targetIndex];
     const userReviews = reviews.filter(r => r.targetUserId === req.body.targetUserId);
     const avgRating = userReviews.reduce((sum, r) => sum + r.rating, 0) / userReviews.length;
     users[targetIndex].rating = Math.round(avgRating * 10) / 10;
     users[targetIndex].reviewCount = userReviews.length;
 
-    const targetReviewsAboutMe = reviews.filter(r => r.reviewerId === req.body.targetUserId);
     const teachStyleCounts = {};
-    targetReviewsAboutMe.forEach(r => {
+    userReviews.forEach(r => {
       if (r.teachingStyle) {
         teachStyleCounts[r.teachingStyle] = (teachStyleCounts[r.teachingStyle] || 0) + 1;
       }
@@ -406,7 +432,7 @@ app.post('/api/reviews', authMiddleware, (req, res) => {
       users[targetIndex].teachingStyleTag = topTeachStyle[0];
     }
 
-    const swapAgainReviews = reviews.filter(r => r.targetUserId === req.body.targetUserId && r.wouldSwapAgain !== null);
+    const swapAgainReviews = userReviews.filter(r => r.wouldSwapAgain !== null);
     if (swapAgainReviews.length > 0) {
       users[targetIndex].swapAgainRate = Math.round(
         (swapAgainReviews.filter(r => r.wouldSwapAgain === true).length / swapAgainReviews.length) * 100
